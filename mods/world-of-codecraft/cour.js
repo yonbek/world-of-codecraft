@@ -11,7 +11,9 @@
 //                click it: the list with the news
 // Hover a villager: its PR; click: select it (shared "wocc.prs.sel"), and the command panel shows
 // it in place of the selected hero; click it again to let it go. Drawn whether or not the village is
-// animated (still sprites then); only the markers and the raven move.
+// animated (still sprites then). Animated, waiting villagers breathe and now and then glance back
+// over their shoulder (a petitioner) or shift their feet (an envoy); the impatient tap, the dejected
+// sigh. All native loops, each villager at its own pace, so the court never moves in step.
 
 import { div, image } from "gpui-kit";
 import { run, shared, setShared } from "herdr";
@@ -41,6 +43,10 @@ const UPSET = { emissaire: "abattu", suppliante: "impatiente", suppliant: "impat
 /** A near-instant swap between two frames: `b` shows half the period (as in ambiance.js). */
 const swap = (el, period) => el.loop("opacity", { from: -6, to: 7, period, easing: "linear" });
 const unswap = (el, period) => el.loop("opacity", { from: 7, to: -6, period, easing: "linear" });
+// A brief one: a loop swings to `to` and back, so a ramp that only clears 0 in its last 1/16 shows the
+// frame for about an eighth of each period, then the base frame again for the rest.
+const brief = (el, period) => el.loop("opacity", { from: -30, to: 2, period, easing: "linear" });
+const unbrief = (el, period) => el.loop("opacity", { from: 31, to: -1, period, easing: "linear" });
 
 export class Cour {
   /** Depth-sorted world elements: [{ z, el, box }], like Ambiance.things. */
@@ -60,10 +66,25 @@ export class Cour {
       const pose = upset ? UPSET[kind] : "debout";
       const p = CREATURES[kind][pose];
       const head = -p.ay;
+      const h = hash(pr.key);
+      // the body: still, or alive (breathing; the impatient tap, the dejected sigh; the others fidget)
+      let body = div().absolute().left(0).top(0).w(0).h(0);
+      if (!live) body = body.child(sprite(kind, pose, face));
+      else if (upset) {
+        body = body.loop("top", kind === "emissaire" ? { from: 0, to: 1, period: 3400 + (h % 700) } : { from: 0, to: -1, period: 420 + (h % 120) })
+          .child(sprite(kind, pose, face));
+      } else {
+        // a petitioner glances back over the shoulder (the mirrored pose), an envoy shifts its feet
+        const [alt, altFace] = kind === "emissaire" ? ["pas", face] : ["debout", face ? "" : "-g"];
+        const every = 7000 + (h % 5000);
+        body = body.loop("top", { from: 0, to: -1, period: 2400 + (h % 900) })
+          .child(unbrief(sprite(kind, pose, face), every))
+          .child(brief(sprite(kind, alt, altFace), every));
+      }
       let el = div().id(id).absolute().left(x).top(y).w(0).h(0)
         .child(div().absolute().left(-11).top(-4).w(22).h(7).rounded_full().bg("#00000033"))
         .when(chosen === pr.key, (e) => e.child(image(`${MONDE}/ring-selected.png`).absolute().left(-24).top(-13).w(48).h(26)))
-        .child(sprite(kind, pose, face));
+        .child(body);
       if (mark === "blocked") {
         el = el.child(image(`${MONDE}/m-blocked.png`).absolute().left(-8).top(head - 28).w(16).h(25)
           .when(live, (e) => e.loop("opacity", { from: 0.35, to: 1, period: 520 })));
