@@ -127,7 +127,7 @@ export default class Fronton {
   envoys(d, fresh) {
     const e = d.envoys;
     const n = (st) => e.filter((p) => p.state === st).length;
-    const icon = image("mods/world-of-codecraft/art/creatures/marchand/debout.png").w(23).h(32);
+    const icon = image("mods/world-of-codecraft/art/creatures/emissaire/debout.png").w(19).h(32);
     const main = d.error && !d.at ? "?" : String(e.length);
     return this.courrier("envoys", icon, main, t("envoysSub", n("fail"), n("changes"), n("comments"), n("ready")),
       `${t("envoysTip", e.length, n("fail"), n("changes"), n("comments"), n("waiting"), n("draft"), n("ready"))}${d.error ? `\n${t("prError", d.error)}` : ""}`,
@@ -138,7 +138,7 @@ export default class Fronton {
     const ps = d.petitioners.filter((p) => p.ready); // the ones waiting on the person
     const back = ps.filter((p) => p.state === "returns").length;
     const waiting = d.petitioners.length - ps.length;
-    const icon = image("mods/world-of-codecraft/art/creatures/fermier/debout.png").w(29).h(31);
+    const icon = image("mods/world-of-codecraft/art/creatures/suppliante/debout.png").w(14).h(31);
     const main = d.error && !d.at ? "?" : String(ps.length);
     return this.courrier("petitioners", icon, main, t("petitionersSub", back, waiting),
       `${t("petitionersTip", ps.length, back, waiting, d.old.length)}${d.error ? `\n${t("prError", d.error)}` : ""}`,

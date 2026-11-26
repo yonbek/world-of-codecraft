@@ -1,10 +1,12 @@
 // The town hall's court: the person's pull requests (prs.js, shared "wocc.prs") as villagers.
 //   petitioners  PRs ready for the person's review (prs.js `ready`: not a draft, CI passing, none of
-//                their threads open) queue at the town-hall door, longest wait first
-//                (peasant woman and farmer by turns); one back with new commits wears the gold "?"
-//   envoys       the person's own PRs wait on the cobbles facing the hall (merchants): CI failed or
-//                changes requested = turned away from the door with the "!", unresolved comments =
-//                the "!" facing the door, approved = the gold "?"; drafts stay home (the list has them)
+//                their threads open) queue at the town-hall door, longest wait first (a townswoman
+//                or an old man, each holding a petition); waiting three days or more = impatient
+//                (arms crossed, cane tapping); one back with new commits wears the gold "?"
+//   envoys       the person's own PRs wait on the cobbles facing the hall (messengers in blue livery
+//                with a sealed scroll): CI failed or changes requested = dejected and turned away from
+//                the door, unresolved comments = the "!", approved = the gold "?"; drafts stay home
+//                (the list has them)
 //   raven        perches on the hall's gilded rod while something changed since the person last looked;
 //                click it: the list with the news
 // Hover a villager: its PR; click: select it (shared "wocc.prs.sel"), and the command panel shows
@@ -29,11 +31,12 @@ const QUEUE = [[1222, 356], [1188, 368], [1154, 380], [1120, 391], [1086, 398]];
 const ENVOYS = [[1306, 390], [1346, 382], [1384, 372], [1268, 399], [1326, 399], [1364, 396]];
 const PERCH = [1318, 121]; // the tip of the gilded rod on the clock tower
 
-const NEEDS = new Set(["fail", "changes", "comments"]);
 const AWAY = new Set(["fail", "changes"]); // turned away from the door
 
-/** Who stands for a PR: a merchant for the person's own, a peasant woman or a farmer for a review. */
-export const villagerKind = (p, list) => (list === "envoys" ? "marchand" : hash(p.key) % 2 ? "fermier" : "paysanne");
+/** Who stands for a PR: a messenger for the person's own, a townswoman or an old man for a review. */
+export const villagerKind = (p, list) => (list === "envoys" ? "emissaire" : hash(p.key) % 2 ? "suppliant" : "suppliante");
+/** Each one's "waiting badly" pose: the envoy's dejected, the petitioners' impatient. */
+const UPSET = { emissaire: "abattu", suppliante: "impatiente", suppliant: "impatient" };
 
 /** A near-instant swap between two frames: `b` shows half the period (as in ambiance.js). */
 const swap = (el, period) => el.loop("opacity", { from: -6, to: 7, period, easing: "linear" });
@@ -48,20 +51,19 @@ export class Cour {
     const out = [];
     const chosen = shared(PRSEL)?.key;
 
-    const sprite = (kind, face) => {
-      const p = CREATURES[kind]?.debout;
-      return p && image(`${CRE}/${kind}/debout${face}${n}.png`).absolute().left(-p.ax).top(-p.ay).w(p.w).h(p.h);
+    const sprite = (kind, pose, face) => {
+      const p = CREATURES[kind]?.[pose];
+      return p && image(`${CRE}/${kind}/${pose}${face}${n}.png`).absolute().left(-p.ax).top(-p.ay).w(p.w).h(p.h);
     };
 
-    const villager = (id, kind, [x, y], face, pr, { mark = null, bob = false } = {}) => {
-      const p = CREATURES[kind].debout;
+    const villager = (id, kind, [x, y], face, pr, { mark = null, upset = false } = {}) => {
+      const pose = upset ? UPSET[kind] : "debout";
+      const p = CREATURES[kind][pose];
       const head = -p.ay;
       let el = div().id(id).absolute().left(x).top(y).w(0).h(0)
         .child(div().absolute().left(-11).top(-4).w(22).h(7).rounded_full().bg("#00000033"))
         .when(chosen === pr.key, (e) => e.child(image(`${MONDE}/ring-selected.png`).absolute().left(-24).top(-13).w(48).h(26)))
-        .child(div().absolute().left(0).top(0).w(0).h(0)
-          .when(bob && live, (e) => e.loop("top", { from: 0, to: -2, period: 700 }))
-          .child(sprite(kind, face)));
+        .child(sprite(kind, pose, face));
       if (mark === "blocked") {
         el = el.child(image(`${MONDE}/m-blocked.png`).absolute().left(-8).top(head - 28).w(16).h(25)
           .when(live, (e) => e.loop("opacity", { from: 0.35, to: 1, period: 520 })));
@@ -91,15 +93,16 @@ export class Cour {
     pets.slice(0, QUEUE.length).forEach((p, i) => {
       const waited = Date.now() - p.updatedAt > 3 * 86_400_000; // three days: impatient
       out.push(villager(`petition-${p.key}`, villagerKind(p, "petitioners"), QUEUE[i], "-g", p,
-        { mark: p.state === "returns" ? "done" : null, bob: waited }));
+        { mark: p.state === "returns" ? "done" : null, upset: waited }));
     });
     if (pets.length > QUEUE.length) out.push(more("petition-plus", QUEUE[QUEUE.length - 1], pets.length - QUEUE.length, "petitioners"));
 
-    // envoys: facing the hall, or turned away
+    // envoys: facing the hall, or dejected and turned away
     const envoys = d.envoys.filter((p) => p.state !== "draft");
     envoys.slice(0, ENVOYS.length).forEach((p, i) => {
-      out.push(villager(`envoy-${p.key}`, "marchand", ENVOYS[i], AWAY.has(p.state) ? "-g" : "", p,
-        { mark: NEEDS.has(p.state) ? "blocked" : p.state === "ready" ? "done" : null }));
+      const away = AWAY.has(p.state);
+      out.push(villager(`envoy-${p.key}`, villagerKind(p, "envoys"), ENVOYS[i], away ? "-g" : "", p,
+        { upset: away, mark: p.state === "comments" ? "blocked" : p.state === "ready" ? "done" : null }));
     });
     if (envoys.length > ENVOYS.length) out.push(more("envoy-plus", ENVOYS[ENVOYS.length - 1], envoys.length - ENVOYS.length, "envoys"));
 
