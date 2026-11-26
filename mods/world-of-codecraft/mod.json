@@ -1,1 +1,2 @@
-{ "place": "none", "title": "World of Codecraft" }
+{ "place": "none", "title": "World of Codecraft",
+  "palette": [{ "title": "Envoys and Petitioners (your PRs and reviews)", "command": "world-of-codecraft.registre", "words": "pull requests github review" }] }
