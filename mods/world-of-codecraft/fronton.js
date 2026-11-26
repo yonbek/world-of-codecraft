@@ -135,12 +135,13 @@ export default class Fronton {
   }
 
   petitioners(d, fresh) {
-    const ps = d.petitioners;
+    const ps = d.petitioners.filter((p) => p.ready); // the ones waiting on the person
     const back = ps.filter((p) => p.state === "returns").length;
+    const waiting = d.petitioners.length - ps.length;
     const icon = image("mods/world-of-codecraft/art/creatures/fermier/debout.png").w(29).h(31);
     const main = d.error && !d.at ? "?" : String(ps.length);
-    return this.courrier("petitioners", icon, main, t("petitionersSub", back, d.old.length),
-      `${t("petitionersTip", ps.length, back, d.old.length)}${d.error ? `\n${t("prError", d.error)}` : ""}`,
+    return this.courrier("petitioners", icon, main, t("petitionersSub", back, waiting),
+      `${t("petitionersTip", ps.length, back, waiting, d.old.length)}${d.error ? `\n${t("prError", d.error)}` : ""}`,
       false, fresh);
   }
 

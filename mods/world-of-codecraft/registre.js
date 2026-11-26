@@ -16,9 +16,11 @@ import { P, txt, title, well, gem, bar, button, frame, frameT } from "./ui.js";
 export const W = 640, H = 600; // the popup's size (a popup's content needs a definite height)
 
 // Each PR state as one of the board's gems (blocked blinks red, done glows gold); draft has none.
-const GEM = { fail: "blocked", changes: "blocked", comments: "done", returns: "done", waiting: "idle", asked: "idle", ready: "working", draft: null };
-const TONE = { fail: P.blocked, changes: P.blocked, comments: P.done, returns: P.done, waiting: P.idle, asked: P.idle, ready: P.working, draft: P.dim };
-const RANK = [...ENVOY_ORDER, "returns", "asked"];
+const GEM = { fail: "blocked", changes: "blocked", comments: "done", returns: "done", waiting: "idle", asked: "idle", ready: "working", draft: null, notready: null };
+const TONE = { fail: P.blocked, changes: P.blocked, comments: P.done, returns: P.done, waiting: P.idle, asked: P.idle, ready: P.working, draft: P.dim, notready: P.dim };
+const RANK = [...ENVOY_ORDER, "returns", "asked", "notready"];
+/** The state a line shows: a petitioner not ready for review is "not ready" whatever brought it. */
+const shown = (p) => (p.ready === false ? "notready" : p.state);
 
 function ago(ms) {
   const m = Math.max(0, Math.round((Date.now() - ms) / 60_000));
@@ -31,7 +33,7 @@ function ago(ms) {
 function byRepo(prs) {
   const groups = new Map();
   for (const p of prs) groups.set(p.repo, [...(groups.get(p.repo) ?? []), p]);
-  const rank = (ps) => Math.min(...ps.map((p) => RANK.indexOf(p.state)));
+  const rank = (ps) => Math.min(...ps.map((p) => RANK.indexOf(shown(p))));
   return [...groups].sort(([a, pa], [b, pb]) => rank(pa) - rank(pb) || a.localeCompare(b));
 }
 
@@ -74,9 +76,10 @@ export default class Registre {
   }
 
   line(p, dim) {
-    const st = p.state; // none for an older petitioner
+    const st = shown(p); // none for an older petitioner
     const meta = [];
-    if (st && st !== "comments") meta.push(t("prState")[st]);
+    if (st === "notready") meta.push(`${t("prState").notready}: ${t("prNotReady")[p.notReady]}`);
+    else if (st && st !== "comments") meta.push(t("prState")[st]);
     if (p.open) meta.push(t("prOpen", p.open));
     if (this.list === "petitioners") meta.push(`@${p.author}`);
     if (p.adds != null) meta.push(`+${p.adds} −${p.dels}`);
@@ -97,7 +100,7 @@ export default class Registre {
   /** One repo, as one of the board's district cards. */
   repo(name, prs, dim = false) {
     const [owner, short] = name.split("/");
-    const counts = RANK.map((st) => [st, prs.filter((p) => p.state === st).length]).filter(([, n]) => n > 0);
+    const counts = RANK.map((st) => [st, prs.filter((p) => shown(p) === st).length]).filter(([, n]) => n > 0);
     const head = h_flex().h(34).pl(6).pr(4).gap(8).items_center()
       .child(v_flex().flex_1().min_w(0).gap(0)
         .child(txt(short, 17, dim ? P.muted : P.cream, 800).truncate())

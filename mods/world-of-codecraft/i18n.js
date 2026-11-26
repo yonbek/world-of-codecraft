@@ -79,10 +79,11 @@ const S = {
       fail ? `${fail} CI failed` : changes ? `${changes} changes req.` : comments ? `${comments} with comments` : ready ? `${ready} approved` : "all in review",
     envoysTip: (n, fail, changes, comments, waiting, draft, ready) =>
       `Envoys: your ${n} open PRs\n${fail} CI failed\n${changes} changes requested\n${comments} with unresolved comments\n${waiting} in review\n${draft} draft\n${ready} approved\n(click: the list)`,
-    petitionersSub: (returns, old) => returns ? `${returns} new commits` : old ? `+${old} older` : "none waiting",
-    petitionersTip: (n, returns, old) =>
-      `Petitioners: ${n} PRs waiting for your review\n${returns} with new commits since your review\n${old} older, quiet for 30+ days\n(click: the list)`,
-    prState: { fail: "CI failed", changes: "changes requested", comments: "with comments", waiting: "in review", draft: "draft", ready: "approved", returns: "new commits", asked: "review requested" },
+    petitionersSub: (returns, notReady) => returns ? `${returns} new commits` : notReady ? `+${notReady} not ready` : "none waiting",
+    petitionersTip: (n, returns, notReady, old) =>
+      `Petitioners: ${n} PRs ready for your review\n${returns} of them with new commits since your review\n${notReady} more not ready yet (draft, CI failing or running, or your comments still open)\n${old} older, quiet for 30+ days\n(click: the list)`,
+    prState: { fail: "CI failed", changes: "changes requested", comments: "with comments", waiting: "in review", draft: "draft", ready: "approved", returns: "new commits", asked: "review requested", notready: "not ready" },
+    prNotReady: { draft: "draft", ciFail: "CI failing", ciRunning: "CI running", yourComments: "your comments open" },
     prNeedYou: (n) => `${n} need you`,
     prOpen: (n) => `${n} unresolved`,
     prOld: (n) => `${n} older review requests (quiet for 30+ days)`,

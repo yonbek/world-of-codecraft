@@ -1,7 +1,10 @@
 // Envoys and Petitioners: the person's pull requests, from GitHub through `gh` (its own auth).
 //   envoys       the person's own open PRs, in every repo
 //   petitioners  open PRs that ask the person's review by name, or that they reviewed (not approved)
-//                and that got new commits since; only those updated in the last RECENT_DAYS
+//                and that got new commits since; only those updated in the last RECENT_DAYS. One is
+//                `ready` (the person is what it waits on) when it isn't a draft, its CI isn't failing or
+//                running (no CI counts as passing), and no thread the person started is unresolved;
+//                otherwise `notReady` says why
 //   old          the petitioners past that, listed apart and never counted or announced
 // One copy polls (the header's) and publishes the result in shared "wocc.prs"; every copy reads it.
 // What the person has seen is shared "wocc.prs.seen" (key → signature), kept by the header.
@@ -26,7 +29,7 @@ const SEARCH = `{
 }`;
 const DETAILS = `${LIST} isDraft reviewDecision additions deletions
   commits(last: 1) { nodes { commit { committedDate statusCheckRollup { state } } } }
-  reviewThreads(first: 50) { nodes { isResolved } }
+  reviewThreads(first: 50) { nodes { isResolved comments(first: 1) { nodes { author { login } } } } }
   latestReviews(first: 20) { nodes { author { login } state submittedAt } }`;
 
 /** Envoy states, most urgent first. */
@@ -72,9 +75,17 @@ function envoy(n) {
     sig: `${state}|${ci}|${decision}|${open}|${c?.committedDate}` };
 }
 
-function petitioner(n, state) {
+function petitioner(n, state, me) {
   const c = n.commits.nodes[0]?.commit;
-  return { ...base(n), adds: n.additions, dels: n.deletions, state, sig: `${state}|${c?.committedDate}` };
+  const ci = c?.statusCheckRollup?.state ?? null;
+  const mine = n.reviewThreads.nodes.filter((x) => !x.isResolved && x.comments.nodes[0]?.author?.login === me).length;
+  const notReady = n.isDraft ? "draft"
+    : ci === "FAILURE" || ci === "ERROR" ? "ciFail"
+    : ci === "PENDING" || ci === "EXPECTED" ? "ciRunning"
+    : mine > 0 ? "yourComments"
+    : null;
+  return { ...base(n), adds: n.additions, dels: n.deletions, state, ready: !notReady, notReady, mine,
+    sig: `${state}|${notReady}|${c?.committedDate}` };
 }
 
 /** The new commits of a PR the person reviewed without approving, since that review. */
@@ -100,9 +111,9 @@ async function load() {
   const envoys = s.mine.nodes.map((n) => d.get(n.id)).filter(Boolean).map(envoy)
     .sort((a, b) => ENVOY_ORDER.indexOf(a.state) - ENVOY_ORDER.indexOf(b.state) || b.updatedAt - a.updatedAt);
   const petitioners = [
-    ...reviewed.map((n) => d.get(n.id)).filter((n) => n && returns(n, me)).map((n) => petitioner(n, "returns")),
-    ...recentAsked.map((n) => d.get(n.id)).filter(Boolean).map((n) => petitioner(n, "asked")),
-  ].sort((a, b) => (a.state === "returns" ? 0 : 1) - (b.state === "returns" ? 0 : 1) || a.updatedAt - b.updatedAt);
+    ...reviewed.map((n) => d.get(n.id)).filter((n) => n && returns(n, me)).map((n) => petitioner(n, "returns", me)),
+    ...recentAsked.map((n) => d.get(n.id)).filter(Boolean).map((n) => petitioner(n, "asked", me)),
+  ].sort((a, b) => Number(b.ready) - Number(a.ready) || (a.state === "returns" ? 0 : 1) - (b.state === "returns" ? 0 : 1) || a.updatedAt - b.updatedAt);
   return { me, envoys, petitioners, old };
 }
 
@@ -122,9 +133,9 @@ function announce(prev, next) {
     if (p.decision !== o.decision && p.decision === "APPROVED") envoyNews.push({ level: "success", title: t("prToastApproved"), body: label });
     if (p.open > o.open) envoyNews.push({ level: "warning", title: t("prToastComments", p.open - o.open), body: label });
   }
-  for (const p of next.petitioners) {
+  for (const p of next.petitioners) { // only when one becomes ready for the person
     const o = was.get(p.key);
-    if (o && o.state === p.state) continue;
+    if (!p.ready || (o && o.ready && o.state === p.state)) continue;
     petitionerNews.push({ level: "info", title: t(p.state === "returns" ? "prToastReturns" : "prToastAsked", p.author), body: `${p.short}#${p.number} ${p.title}` });
   }
   const all = [

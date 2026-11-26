@@ -1,5 +1,6 @@
 // The town hall's court: the person's pull requests (prs.js, shared "wocc.prs") as villagers.
-//   petitioners  PRs waiting for the person's review queue at the town-hall door, longest wait first
+//   petitioners  PRs ready for the person's review (prs.js `ready`: not a draft, CI passing, none of
+//                their threads open) queue at the town-hall door, longest wait first
 //                (peasant woman and farmer by turns); one back with new commits wears the gold "?"
 //   envoys       the person's own PRs wait on the cobbles facing the hall (merchants): CI failed or
 //                changes requested = turned away from the door with the "!", unresolved comments =
@@ -78,7 +79,7 @@ export class Cour {
     });
 
     // petitioners: the queue at the door, longest wait first
-    const pets = [...d.petitioners].sort((a, b) => (a.state === "returns" ? 0 : 1) - (b.state === "returns" ? 0 : 1) || a.updatedAt - b.updatedAt);
+    const pets = d.petitioners.filter((p) => p.ready).sort((a, b) => (a.state === "returns" ? 0 : 1) - (b.state === "returns" ? 0 : 1) || a.updatedAt - b.updatedAt);
     pets.slice(0, QUEUE.length).forEach((p, i) => {
       const waited = Date.now() - p.updatedAt > 3 * 86_400_000; // three days: impatient
       out.push(villager(`petition-${p.key}`, i % 2 ? "fermier" : "paysanne", QUEUE[i], "-g", p,
