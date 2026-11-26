@@ -1,8 +1,7 @@
 // The town hall's court: the person's pull requests (prs.js, shared "wocc.prs") as villagers.
 //   petitioners  PRs ready for the person's review (prs.js `ready`: not a draft, CI passing, none of
 //                their threads open) queue at the town-hall door, longest wait first (a townswoman
-//                or an old man, each holding a petition); waiting three days or more = impatient
-//                (arms crossed, cane tapping); one back with new commits wears the gold "?"
+//                or an old man, each holding a petition); one back with new commits wears the gold "?"
 //   envoys       the person's own PRs wait on the cobbles facing the hall (messengers in blue livery
 //                with a sealed scroll): CI failed or changes requested = dejected and turned away from
 //                the door, unresolved comments = the "!", approved = the gold "?"; drafts stay home
@@ -11,9 +10,9 @@
 //                click it: the list with the news
 // Hover a villager: its PR; click: select it (shared "wocc.prs.sel"), and the command panel shows
 // it in place of the selected hero; click it again to let it go. Drawn whether or not the village is
-// animated (still sprites then). Animated, waiting villagers breathe and now and then glance back
-// over their shoulder (a petitioner) or shift their feet (an envoy); the impatient tap, the dejected
-// sigh. All native loops, each villager at its own pace, so the court never moves in step.
+// animated (still sprites then). Animated, they breathe: a slow native rise and fall, each at its own
+// pace, so the court never moves in step. Selecting one also brings the camera to it (place.js reads
+// `where`, the villagers' feet points from the last draw).
 
 import { div, image } from "gpui-kit";
 import { run, shared, setShared } from "herdr";
@@ -37,16 +36,13 @@ const AWAY = new Set(["fail", "changes"]); // turned away from the door
 
 /** Who stands for a PR: a messenger for the person's own, a townswoman or an old man for a review. */
 export const villagerKind = (p, list) => (list === "envoys" ? "emissaire" : hash(p.key) % 2 ? "suppliant" : "suppliante");
-/** Each one's "waiting badly" pose: the envoy's dejected, the petitioners' impatient. */
-const UPSET = { emissaire: "abattu", suppliante: "impatiente", suppliant: "impatient" };
+/** The envoy's "turned away" pose. */
+const UPSET = { emissaire: "abattu" };
 
 /** A near-instant swap between two frames: `b` shows half the period (as in ambiance.js). */
 const swap = (el, period) => el.loop("opacity", { from: -6, to: 7, period, easing: "linear" });
 const unswap = (el, period) => el.loop("opacity", { from: 7, to: -6, period, easing: "linear" });
-// A brief one: a loop swings to `to` and back, so a ramp that only clears 0 in its last 1/16 shows the
-// frame for about an eighth of each period, then the base frame again for the rest.
-const brief = (el, period) => el.loop("opacity", { from: -30, to: 2, period, easing: "linear" });
-const unbrief = (el, period) => el.loop("opacity", { from: 31, to: -1, period, easing: "linear" });
+
 
 export class Cour {
   /** Depth-sorted world elements: [{ z, el, box }], like Ambiance.things. */
@@ -55,6 +51,7 @@ export class Cour {
     if (!d?.envoys) return [];
     const n = night ? "-n" : "";
     const out = [];
+    this.where = {};
     const chosen = shared(PRSEL)?.key;
 
     const sprite = (kind, pose, face) => {
@@ -66,21 +63,11 @@ export class Cour {
       const pose = upset ? UPSET[kind] : "debout";
       const p = CREATURES[kind][pose];
       const head = -p.ay;
-      const h = hash(pr.key);
-      // the body: still, or alive (breathing; the impatient tap, the dejected sigh; the others fidget)
-      let body = div().absolute().left(0).top(0).w(0).h(0);
-      if (!live) body = body.child(sprite(kind, pose, face));
-      else if (upset) {
-        body = body.loop("top", kind === "emissaire" ? { from: 0, to: 1, period: 3400 + (h % 700) } : { from: 0, to: -1, period: 420 + (h % 120) })
-          .child(sprite(kind, pose, face));
-      } else {
-        // a petitioner glances back over the shoulder (the mirrored pose), an envoy shifts its feet
-        const [alt, altFace] = kind === "emissaire" ? ["pas", face] : ["debout", face ? "" : "-g"];
-        const every = 7000 + (h % 5000);
-        body = body.loop("top", { from: 0, to: -1, period: 2400 + (h % 900) })
-          .child(unbrief(sprite(kind, pose, face), every))
-          .child(brief(sprite(kind, alt, altFace), every));
-      }
+      this.where[pr.key] = [x, y];
+      // breathing: a slow rise and fall of one pixel, eased, at the villager's own pace
+      const body = div().absolute().left(0).top(0).w(0).h(0)
+        .when(live, (e) => e.loop("top", { from: 0, to: -1, period: 2800 + (hash(pr.key) % 1400), easing: "ease-in-out" }))
+        .child(sprite(kind, pose, face));
       let el = div().id(id).absolute().left(x).top(y).w(0).h(0)
         .child(div().absolute().left(-11).top(-4).w(22).h(7).rounded_full().bg("#00000033"))
         .when(chosen === pr.key, (e) => e.child(image(`${MONDE}/ring-selected.png`).absolute().left(-24).top(-13).w(48).h(26)))
@@ -112,9 +99,8 @@ export class Cour {
     // petitioners: the queue at the door, longest wait first
     const pets = d.petitioners.filter((p) => p.ready).sort((a, b) => (a.state === "returns" ? 0 : 1) - (b.state === "returns" ? 0 : 1) || a.updatedAt - b.updatedAt);
     pets.slice(0, QUEUE.length).forEach((p, i) => {
-      const waited = Date.now() - p.updatedAt > 3 * 86_400_000; // three days: impatient
       out.push(villager(`petition-${p.key}`, villagerKind(p, "petitioners"), QUEUE[i], "-g", p,
-        { mark: p.state === "returns" ? "done" : null, upset: waited }));
+        { mark: p.state === "returns" ? "done" : null }));
     });
     if (pets.length > QUEUE.length) out.push(more("petition-plus", QUEUE[QUEUE.length - 1], pets.length - QUEUE.length, "petitioners"));
 

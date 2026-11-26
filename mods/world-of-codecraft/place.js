@@ -481,6 +481,13 @@ export default class Place {
       this.camX = sel.x - vw / 2; // glide to the selected unit
       if (imm) this.camY = sel.y - 60 - (this.h ?? WORLD.h) / 2; // and bring the village back into view
     } else if (sel?.leg && !this.manual) this.camX = sel.x - vw / 2; // and follow it while it walks
+    // a villager of the court selected (cour.js): the camera goes to it, as for a hero
+    const pick = shared(PRSEL)?.key ?? null;
+    const spot = pick && this.cour.where?.[pick];
+    if (pick !== this.lastPick && (!pick || spot)) { // wait for the court's first draw to know where it stands
+      this.lastPick = pick;
+      if (spot) { this.camX = spot[0] - vw / 2; this.manual = true; }
+    }
     const camX = this.cam(vw);
 
     // frame animation: visible units with frames, or any walking unit
