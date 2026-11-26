@@ -23,8 +23,10 @@ const MONDE = "mods/world-of-codecraft/art/monde";
 
 // Feet points (world px). The queue runs from the door down towards the road; envoys stand on the
 // cobbles between the hall and the well. The last spot of each holds "+N" when there are more.
-const QUEUE = [[1214, 340], [1174, 352], [1134, 364], [1094, 378], [1054, 392]];
-const ENVOYS = [[1262, 366], [1308, 366], [1354, 366], [1284, 394], [1330, 394], [1376, 394]];
+// Every spot's feet sit below the hall's depth line (front cut-out z 350): above it the hall is
+// drawn over them.
+const QUEUE = [[1222, 356], [1188, 368], [1154, 380], [1120, 391], [1086, 398]];
+const ENVOYS = [[1306, 390], [1346, 382], [1384, 372], [1268, 399], [1326, 399], [1364, 396]];
 const PERCH = [1318, 121]; // the tip of the gilded rod on the clock tower
 
 const NEEDS = new Set(["fail", "changes", "comments"]);
