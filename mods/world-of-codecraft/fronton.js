@@ -9,7 +9,7 @@
 
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { spaces, agents, run, props, layout, nextCommand, window as appWindow } from "herdr";
+import { spaces, agents, run, props, layout, nextCommand, shared, setShared, window as appWindow } from "herdr";
 import { VILLAGE, district, clip, heroOf, heroTitle, hourName, hhmm, isNight, readQuotas, left } from "./kit.js";
 import { P, DECO, TEXTE, bar, pic, txt, button, mark, banner } from "./ui.js";
 import { DEMO_SPACES } from "./demo.js";
@@ -28,6 +28,21 @@ function setMode(on) {
   run(on ? "layout.hide" : "layout.show", { id: "place" });
   run("layout.resize", on ? { id: "arene", px: 400 } : { id: "arene", weight: 1 });
 }
+// Within immersive mode, fold the big village and the command panel away and let the terminal fill
+// their place. "wocc.fold" remembers it, since a folded window looks like workshop mode with its strip hidden.
+function toggleVillage() {
+  let l; try { l = layout(); } catch { return; }
+  const shown = (id) => { const n = node(l, id); return Boolean(n && !n.hidden); };
+  if (shown("place-immersion")) {
+    run("layout.hide", { id: "place-immersion" });
+    run("layout.hide", { id: "commande" });
+    run("layout.resize", { id: "arene", weight: 1 });
+    setShared("wocc.fold", true);
+  } else if (shared("wocc.fold")) {
+    setShared("wocc.fold", false);
+    if (!shown("place")) setMode(true);
+  }
+}
 
 const PW = 136; // plaque width
 
@@ -43,7 +58,16 @@ export default class Fronton {
     tick(cx);
     cx.timer.every(60_000, tick);
     // ctrl-shift-i (KEYS.json): "world-of-codecraft.mode"
-    cx.spawn(async (cx) => { for (;;) { if ((await nextCommand()) === "mode") { setMode(!immersive()); cx.notify(); } } });
+    // ctrl-shift-k (keys.json): "world-of-codecraft.village"
+    cx.spawn(async (cx) => {
+      for (;;) {
+        const c = await nextCommand();
+        if (c === "mode") { setShared("wocc.fold", false); setMode(!immersive()); }
+        else if (c === "village") toggleVillage();
+        else continue;
+        cx.notify();
+      }
+    });
   }
 
   /** An ornate plaque: icon in its gold socket, the value, a caption. */
