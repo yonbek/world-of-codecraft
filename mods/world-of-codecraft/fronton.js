@@ -49,7 +49,7 @@ function toggleVillage() {
 const PW = 136; // plaque width
 const SEEN_STORE = "wocc.prs.seen"; // localStorage: what the person saw, across restarts
 
-/** The register of one list ("envoys" | "petitioners"), as a popup under the pointer (or centered from a key). */
+/** The register of one list ("envoys" | "petitioners"), as a popup at `at` (window px), else centered. */
 function openRegistre(list, at) {
   openOverlay({ mod: "world-of-codecraft", props: { role: "registre", list }, kind: "popup", width: REG_W, height: REG_H, ...(at ? { at } : {}) });
 }
@@ -68,6 +68,7 @@ export default class Fronton {
     // envoys and petitioners: this copy polls GitHub for every copy (paused while the window is hidden)
     if (!shared(SEEN)) { try { const s = JSON.parse(localStorage.getItem(SEEN_STORE) ?? "null"); if (s) setShared(SEEN, s); } catch {} }
     this.savedSeen = shared(SEEN);
+    this.anchor = {}; // list → its plaque's bounds, from the last press on it
     cx.spawn(async () => { await refresh(); });
     cx.timer.every(POLL_MS, (cx) => { if (appWindow()?.visible !== false) cx.spawn(async () => { await refresh(); }); });
     // ctrl-shift-i (KEYS.json): "world-of-codecraft.mode"
@@ -77,7 +78,7 @@ export default class Fronton {
         const c = await nextCommand();
         if (c === "mode") { setShared("wocc.fold", false); setMode(!immersive()); }
         else if (c === "village") toggleVillage();
-        else if (c === "envoys" || c === "petitioners") openRegistre(c, null);
+        else if (c === "envoys" || c === "petitioners") openRegistre(c, this.under(c));
         else continue;
         cx.notify();
       }
@@ -103,10 +104,17 @@ export default class Fronton {
     return this.plaque(`res-${acc}`, icon, `${t("pct", rem)}${q.stale ? " ?" : ""}`, five, tip, rem <= 20);
   }
 
+  /** Where a list's register opens: its left edge under its plaque (null before the plaque was pressed). */
+  under(list) {
+    const b = this.anchor[list];
+    return b ? { x: Math.round(b.x), y: Math.round(b.y + b.height + 4) } : null;
+  }
+
   /** A plaque that opens the register, with a gold dot while something in it is new. */
   courrier(list, icon, main, sub, tip, warn, fresh) {
     return this.plaque(`res-${list}`, icon, main, sub, tip, warn).cursor_pointer()
-      .on_click(() => openRegistre(list, "pointer"))
+      .on_mouse_down("left", (e) => { if (e.bounds) this.anchor[list] = e.bounds; })
+      .on_click(() => openRegistre(list, this.under(list)))
       .when(fresh > 0, (el) => el.child(div().absolute().right(6).top(5).w(8).h(8).rounded(4).bg(P.gold)
         .loop("opacity", { from: 0.45, to: 1, period: 1400 })));
   }
