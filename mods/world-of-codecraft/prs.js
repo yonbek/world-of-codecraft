@@ -109,41 +109,46 @@ async function load() {
 function announce(prev, next) {
   if (!prev) return;
   const was = new Map([...prev.envoys, ...prev.petitioners].map((p) => [p.key, p]));
-  const news = [];
+  const petitionerNews = [];
+  const envoyNews = [];
   for (const p of next.envoys) {
     const o = was.get(p.key);
     if (!o) continue;
     const label = `${p.short}#${p.number} ${p.title}`;
-    if (p.state === "fail" && o.state !== "fail") news.push({ level: "error", title: t("prToastFail"), body: label });
-    else if (o.state === "fail" && p.ci === "SUCCESS") news.push({ level: "success", title: t("prToastFixed"), body: label });
-    if (p.decision !== o.decision && p.decision === "CHANGES_REQUESTED") news.push({ level: "warning", title: t("prToastChanges"), body: label });
-    if (p.decision !== o.decision && p.decision === "APPROVED") news.push({ level: "success", title: t("prToastApproved"), body: label });
-    if (p.open > o.open) news.push({ level: "warning", title: t("prToastComments", p.open - o.open), body: label });
+    if (p.state === "fail" && o.state !== "fail") envoyNews.push({ level: "error", title: t("prToastFail"), body: label });
+    else if (o.state === "fail" && p.ci === "SUCCESS") envoyNews.push({ level: "success", title: t("prToastFixed"), body: label });
+    if (p.decision !== o.decision && p.decision === "CHANGES_REQUESTED") envoyNews.push({ level: "warning", title: t("prToastChanges"), body: label });
+    if (p.decision !== o.decision && p.decision === "APPROVED") envoyNews.push({ level: "success", title: t("prToastApproved"), body: label });
+    if (p.open > o.open) envoyNews.push({ level: "warning", title: t("prToastComments", p.open - o.open), body: label });
   }
   for (const p of next.petitioners) {
     const o = was.get(p.key);
     if (o && o.state === p.state) continue;
-    news.push({ level: "info", title: t(p.state === "returns" ? "prToastReturns" : "prToastAsked", p.author), body: `${p.short}#${p.number} ${p.title}` });
+    petitionerNews.push({ level: "info", title: t(p.state === "returns" ? "prToastReturns" : "prToastAsked", p.author), body: `${p.short}#${p.number} ${p.title}` });
   }
-  const action = { name: "world-of-codecraft.registre" };
-  if (news.length > 3) notify({ level: "info", title: t("prToastMany", news.length), action });
-  else for (const n of news) notify({ ...n, action });
+  const all = [
+    ...envoyNews.map((n) => ({ ...n, action: { name: "world-of-codecraft.envoys" } })),
+    ...petitionerNews.map((n) => ({ ...n, action: { name: "world-of-codecraft.petitioners" } })),
+  ];
+  if (all.length > 3) notify({ level: "info", title: t("prToastMany", all.length), action: all[0].action });
+  else for (const n of all) notify(n);
 }
 
 /** A PR's signature, by key: what "seen" compares against. */
 export const signatures = (d) => Object.fromEntries([...d.envoys, ...d.petitioners].map((p) => [p.key, p.sig]));
 
-/** Keys of the PRs that changed since the person last opened the register. */
-export function unseen(d) {
+/** Keys of the PRs in a list ("envoys" | "petitioners") that changed since the person last opened it. */
+export function unseen(d, list) {
   const seen = shared(SEEN);
-  if (!d || !seen) return new Set();
-  return new Set([...d.envoys, ...d.petitioners].filter((p) => seen[p.key] !== p.sig).map((p) => p.key));
+  if (!d?.[list] || !seen) return new Set();
+  return new Set(d[list].filter((p) => seen[p.key] !== p.sig).map((p) => p.key));
 }
 
-/** Marks every PR as seen. */
-export function markSeen() {
+/** Marks every PR of a list as seen. */
+export function markSeen(list) {
   const d = shared(KEY);
-  if (d?.envoys) setShared(SEEN, signatures(d));
+  if (!d?.[list]) return;
+  setShared(SEEN, { ...(shared(SEEN) ?? {}), ...Object.fromEntries(d[list].map((p) => [p.key, p.sig])) });
 }
 
 let running = false;

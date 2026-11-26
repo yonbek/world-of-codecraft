@@ -1,7 +1,7 @@
-// The register (a popup from the header's Envoys / Petitioners plaques): every envoy (the person's
-// own PRs) and petitioner (PRs waiting for their review), most urgent first, with what changed since
-// they last looked marked by a gold dot. Click a line: open the PR in the browser. Older petitioners
-// (no activity in 30 days) fold away at the bottom. Opening it marks everything as seen.
+// The register (a popup from a header plaque), one list per plaque (props.list): "envoys" (the
+// person's own PRs) or "petitioners" (PRs waiting for their review), most urgent first, with what
+// changed since they last looked marked by a gold dot. Click a line: open the PR in the browser.
+// Older petitioners (no activity in 30 days) fold away at the bottom. Opening it marks its list as seen.
 
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
@@ -22,9 +22,10 @@ function ago(ms) {
 
 export default class Registre {
   init() {
-    this.fresh = unseen(shared(KEY)); // what to mark as new while this stays open
+    this.list = props()?.list === "petitioners" ? "petitioners" : "envoys";
+    this.fresh = unseen(shared(KEY), this.list); // what to mark as new while this stays open
     this.showOld = false;
-    markSeen();
+    markSeen(this.list);
   }
 
   open(url) {
@@ -64,10 +65,10 @@ export default class Registre {
 
   render() {
     const d = shared(KEY);
-    const envoys = d?.envoys ?? [];
-    const pets = d?.petitioners ?? [];
-    const old = d?.old ?? [];
-    const need = envoys.filter((p) => NEEDS_YOU.has(p.state)).length;
+    const mine = this.list === "envoys";
+    const items = d?.[this.list] ?? [];
+    const old = mine ? [] : d?.old ?? [];
+    const need = mine ? items.filter((p) => NEEDS_YOU.has(p.state)).length : 0;
     const status = d?.error ? t("prError", d.error) : d?.at ? t("prUpdated", ago(d.at)) : t("prLoading");
 
     const empty = (s) => div().px(36).py(10).child(txt(s, 14, P.dim, 700));
@@ -78,10 +79,8 @@ export default class Registre {
 
     return well(v_flex().w(W).h(H).overflow_hidden(), { bg: P.night })
       .child(v_flex().id("registre").flex_1().min_h(0).overflow_y_scrollbar()
-        .child(this.heading(t("envoys"), envoys.length, need ? txt(t("prNeedYou", need), 14, P.blocked, 800) : null))
-        .children(envoys.length ? envoys.map((p) => this.line(p)) : [empty(t("prNoEnvoys"))])
-        .child(this.heading(t("petitioners"), pets.length))
-        .children(pets.length ? pets.map((p) => this.line(p)) : [empty(t("prNoPetitioners"))])
+        .child(this.heading(t(this.list), items.length, need ? txt(t("prNeedYou", need), 14, P.blocked, 800) : null))
+        .children(items.length ? items.map((p) => this.line(p)) : [empty(t(mine ? "prNoEnvoys" : "prNoPetitioners"))])
         .when(Boolean(toggle), (e) => e.child(toggle))
         .when(this.showOld, (e) => e.children(old.map((p) => this.line(p, { dim: true })))))
       .child(h_flex().flex_none().h(28).px(14).gap(8).items_center().bg(P.leather)

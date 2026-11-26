@@ -49,9 +49,9 @@ function toggleVillage() {
 const PW = 136; // plaque width
 const SEEN_STORE = "wocc.prs.seen"; // localStorage: what the person saw, across restarts
 
-/** The register of envoys and petitioners, as a popup under the pointer (or centered from a key). */
-function openRegistre(at) {
-  openOverlay({ mod: "world-of-codecraft", props: { role: "registre" }, kind: "popup", width: REG_W, height: REG_H, ...(at ? { at } : {}) });
+/** The register of one list ("envoys" | "petitioners"), as a popup under the pointer (or centered from a key). */
+function openRegistre(list, at) {
+  openOverlay({ mod: "world-of-codecraft", props: { role: "registre", list }, kind: "popup", width: REG_W, height: REG_H, ...(at ? { at } : {}) });
 }
 
 export default class Fronton {
@@ -77,7 +77,7 @@ export default class Fronton {
         const c = await nextCommand();
         if (c === "mode") { setShared("wocc.fold", false); setMode(!immersive()); }
         else if (c === "village") toggleVillage();
-        else if (c === "registre") openRegistre(null);
+        else if (c === "envoys" || c === "petitioners") openRegistre(c, null);
         else continue;
         cx.notify();
       }
@@ -104,9 +104,9 @@ export default class Fronton {
   }
 
   /** A plaque that opens the register, with a gold dot while something in it is new. */
-  courrier(id, icon, main, sub, tip, warn, fresh) {
-    return this.plaque(id, icon, main, sub, tip, warn).cursor_pointer()
-      .on_click(() => openRegistre("pointer"))
+  courrier(list, icon, main, sub, tip, warn, fresh) {
+    return this.plaque(`res-${list}`, icon, main, sub, tip, warn).cursor_pointer()
+      .on_click(() => openRegistre(list, "pointer"))
       .when(fresh > 0, (el) => el.child(div().absolute().right(6).top(5).w(8).h(8).rounded(4).bg(P.gold)
         .loop("opacity", { from: 0.45, to: 1, period: 1400 })));
   }
@@ -116,7 +116,7 @@ export default class Fronton {
     const n = (st) => e.filter((p) => p.state === st).length;
     const icon = image("mods/world-of-codecraft/art/creatures/marchand/debout.png").w(23).h(32);
     const main = d.error && !d.at ? "?" : String(e.length);
-    return this.courrier("res-envoys", icon, main, t("envoysSub", n("fail"), n("changes"), n("comments"), n("ready")),
+    return this.courrier("envoys", icon, main, t("envoysSub", n("fail"), n("changes"), n("comments"), n("ready")),
       `${t("envoysTip", e.length, n("fail"), n("changes"), n("comments"), n("waiting"), n("draft"), n("ready"))}${d.error ? `\n${t("prError", d.error)}` : ""}`,
       e.some((p) => NEEDS_YOU.has(p.state)), fresh);
   }
@@ -126,7 +126,7 @@ export default class Fronton {
     const back = ps.filter((p) => p.state === "returns").length;
     const icon = image("mods/world-of-codecraft/art/creatures/fermier/debout.png").w(29).h(31);
     const main = d.error && !d.at ? "?" : String(ps.length);
-    return this.courrier("res-petitioners", icon, main, t("petitionersSub", back, d.old.length),
+    return this.courrier("petitioners", icon, main, t("petitionersSub", back, d.old.length),
       `${t("petitionersTip", ps.length, back, d.old.length)}${d.error ? `\n${t("prError", d.error)}` : ""}`,
       false, fresh);
   }
@@ -157,9 +157,7 @@ export default class Fronton {
     const prs = shared(PRS);
     const seen = shared(SEEN);
     if (seen && seen !== this.savedSeen) { this.savedSeen = seen; try { localStorage.setItem(SEEN_STORE, JSON.stringify(seen)); } catch {} }
-    const fresh = unseen(prs);
-    const isEnvoy = new Set((prs?.envoys ?? []).map((p) => p.key));
-    const freshEnvoys = [...fresh].filter((k) => isEnvoy.has(k)).length;
+
 
     const waiting = blocked.length ? blocked : done;
     let alert = null;
@@ -207,7 +205,7 @@ export default class Fronton {
         .when(Boolean(gold), (el) => el.child(gold))
         .when(Boolean(wood), (el) => el.child(wood))
         .child(this.plaque("res-heros", pic("ic-heros", 26, 22), `${busy} / ${all.length}`, t("heroesAtWork"), t("heroesTip", busy, all.length)))
-        .when(Boolean(prs?.envoys), (el) => el.child(this.envoys(prs, freshEnvoys)).child(this.petitioners(prs, fresh.size - freshEnvoys)))
+        .when(Boolean(prs?.envoys), (el) => el.child(this.envoys(prs, unseen(prs, "envoys").size)).child(this.petitioners(prs, unseen(prs, "petitioners").size)))
         .when(resets.length > 0, (el) => el.child(this.plaque("res-foire", pic("ic-sablier", 22, 28), fair || "—", t("untilFair"), t("fairTip"))))
         .child(div().flex_1().min_w(0).flex().justify_center().when(Boolean(scroll), (el) => el.child(scroll)))
         .when(Boolean(alert), (el) => el.child(alert))
