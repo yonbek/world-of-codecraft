@@ -2,13 +2,14 @@
 // person's own PRs) or "petitioners" (PRs waiting for their review). Drawn like the board: a carved
 // oak frame, a leather heading band, and one enamel card per repo (ruby-trimmed when one of its PRs
 // needs you), each with its state counters and one line per PR, most urgent first. A gold dot marks
-// what changed since the person last looked. Click a line: open the PR in the browser. Older
+// what changed since the person last looked. Click a line: it opens up in place (full title, the
+// facts, an Open button for GitHub); click again to fold it. Older
 // petitioners (no activity in 30 days) fold away at the bottom. Opening it marks its list as seen.
 
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { exec, shared, setShared, props, closeOverlay } from "herdr";
-import { KEY, PANEL, ENVOY_ORDER, NEEDS_YOU, unseen, markSeen, refresh } from "./prs.js";
+import { KEY, PANEL, ENVOY_ORDER, NEEDS_YOU, unseen, markSeen, refresh, ago } from "./prs.js";
 import { gradient } from "./kit.js";
 import { t } from "./i18n.js";
 import { P, txt, title, well, gem, bar, button, frame, frameT } from "./ui.js";
@@ -16,18 +17,11 @@ import { P, txt, title, well, gem, bar, button, frame, frameT } from "./ui.js";
 export const W = 640, H = 600; // the popup's size (a popup's content needs a definite height)
 
 // Each PR state as one of the board's gems (blocked blinks red, done glows gold); draft has none.
-const GEM = { fail: "blocked", changes: "blocked", comments: "done", returns: "done", waiting: "idle", asked: "idle", ready: "working", draft: null, notready: null };
-const TONE = { fail: P.blocked, changes: P.blocked, comments: P.done, returns: P.done, waiting: P.idle, asked: P.idle, ready: P.working, draft: P.dim, notready: P.dim };
+export const GEM = { fail: "blocked", changes: "blocked", comments: "done", returns: "done", waiting: "idle", asked: "idle", ready: "working", draft: null, notready: null };
+export const TONE = { fail: P.blocked, changes: P.blocked, comments: P.done, returns: P.done, waiting: P.idle, asked: P.idle, ready: P.working, draft: P.dim, notready: P.dim };
 const RANK = [...ENVOY_ORDER, "returns", "asked", "notready"];
 /** The state a line shows: a petitioner not ready for review is "not ready" whatever brought it. */
-const shown = (p) => (p.ready === false ? "notready" : p.state);
-
-function ago(ms) {
-  const m = Math.max(0, Math.round((Date.now() - ms) / 60_000));
-  if (m < 60) return t("prMin", m);
-  const h = Math.round(m / 60);
-  return h < 48 ? t("prHours", h) : t("prDays", Math.round(h / 24));
-}
+export const shown = (p) => (p.ready === false ? "notready" : p.state);
 
 /** PRs grouped by repo, repos ordered by their most urgent PR, then name. */
 function byRepo(prs) {
@@ -44,6 +38,7 @@ export default class Registre {
     this.list = props()?.list === "petitioners" ? "petitioners" : "envoys";
     this.fresh = unseen(shared(KEY), this.list); // what to mark as new while this stays open
     this.showOld = false;
+    this.expanded = null; // the key of the line opened up
     markSeen(this.list);
     setShared(PANEL, { list: this.list, overlay: props()?.overlay });
   }
@@ -84,17 +79,30 @@ export default class Registre {
     if (this.list === "petitioners") meta.push(`@${p.author}`);
     if (p.adds != null) meta.push(`+${p.adds} −${p.dels}`);
     meta.push(ago(p.updatedAt));
-    return h_flex().id(`pr-${p.key}`).relative().h(40).pl(5).pr(8).gap(6).items_center().rounded(2).cursor_pointer()
-      .bg(GEM[st] === "blocked" ? "#3a1216" : "#00000000").hover((s) => s.bg("#ffffff10"))
-      .tooltip(`${p.repo}#${p.number}\n${p.title}\n${t("prOpenTip")}`)
-      .on_click(() => this.open(p.url))
+    const open = this.expanded === p.key;
+    const row = h_flex().id(`pr-${p.key}`).relative().h(40).pl(5).pr(8).gap(6).items_center().rounded(2).cursor_pointer()
+      .bg(GEM[st] === "blocked" ? "#3a1216" : open ? "#ffffff0c" : "#00000000").hover((s) => s.bg("#ffffff10"))
+      .on_click((_e, cx) => { this.expanded = open ? null : p.key; cx.notify(); })
       .child(div().w(16).flex_none().flex().justify_center().child(GEM[st] ? gem(GEM[st], true) : dot()))
       .child(v_flex().flex_1().min_w(0).gap(0)
         .child(h_flex().min_w(0).gap(6)
           .child(txt(`#${p.number}`, 15, dim ? P.faint : P.muted, 800).flex_none())
           .child(txt(p.title, 15, dim ? P.dim : P.cream, 700).min_w(0).truncate()))
         .child(txt(meta.join(" · "), 13, dim || !st ? P.dim : TONE[st], 700).truncate()))
-      .when(this.fresh.has(p.key), (e) => e.child(div().flex_none().size(8).rounded(4).bg(P.gold)));
+      .when(this.fresh.has(p.key), (e) => e.child(div().flex_none().size(8).rounded(4).bg(P.gold)))
+      .child(txt(open ? "▾" : "▸", 13, P.dim, 800).flex_none());
+    if (!open) return row;
+    const facts = [`${p.repo}#${p.number}`];
+    if ("ci" in p) facts.push(t("prFactCi", p.ci));
+    else if (p.author) facts.push(`@${p.author}`);
+    if (p.mine) facts.push(t("prFactMine", p.mine));
+    return v_flex().rounded(2).bg("#ffffff0c")
+      .child(row)
+      .child(v_flex().pl(27).pr(8).pb(8).gap(4)
+        .child(txt(p.title, 15, P.cream, 700))
+        .child(txt(facts.join(" · "), 13, P.muted, 700))
+        .child(h_flex().gap(6).pt(2)
+          .child(button(`ouvrir-${p.key}`, txt(t("prOpenBtn"), 14, P.cream, 800), () => this.open(p.url), { h: 26, tip: t("prOpenTip") }))));
   }
 
   /** One repo, as one of the board's district cards. */

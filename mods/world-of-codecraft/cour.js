@@ -7,14 +7,15 @@
 //                the "!" facing the door, approved = the gold "?"; drafts stay home (the list has them)
 //   raven        perches on the hall's gilded rod while something changed since the person last looked;
 //                click it: the list with the news
-// Hover a villager: its PR; click: open it on GitHub. Drawn whether or not the village is animated
-// (still sprites then); only the markers and the raven move.
+// Hover a villager: its PR; click: select it (shared "wocc.prs.sel"), and the command panel shows
+// it in place of the selected hero; click it again to let it go. Drawn whether or not the village is
+// animated (still sprites then); only the markers and the raven move.
 
 import { div, image } from "gpui-kit";
-import { exec, run, shared } from "herdr";
+import { run, shared, setShared } from "herdr";
 import { CREATURES } from "./creatures-data.js";
-import { KEY as PRS, unseen } from "./prs.js";
-import { stop } from "./kit.js";
+import { KEY as PRS, PRSEL, unseen } from "./prs.js";
+import { stop, hash } from "./kit.js";
 import { t as tr } from "./i18n.js";
 
 const CRE = "mods/world-of-codecraft/art/creatures";
@@ -29,6 +30,9 @@ const PERCH = [1318, 121]; // the tip of the gilded rod on the clock tower
 const NEEDS = new Set(["fail", "changes", "comments"]);
 const AWAY = new Set(["fail", "changes"]); // turned away from the door
 
+/** Who stands for a PR: a merchant for the person's own, a peasant woman or a farmer for a review. */
+export const villagerKind = (p, list) => (list === "envoys" ? "marchand" : hash(p.key) % 2 ? "fermier" : "paysanne");
+
 /** A near-instant swap between two frames: `b` shows half the period (as in ambiance.js). */
 const swap = (el, period) => el.loop("opacity", { from: -6, to: 7, period, easing: "linear" });
 const unswap = (el, period) => el.loop("opacity", { from: 7, to: -6, period, easing: "linear" });
@@ -40,6 +44,7 @@ export class Cour {
     if (!d?.envoys) return [];
     const n = night ? "-n" : "";
     const out = [];
+    const chosen = shared(PRSEL)?.key;
 
     const sprite = (kind, face) => {
       const p = CREATURES[kind]?.debout;
@@ -51,6 +56,7 @@ export class Cour {
       const head = -p.ay;
       let el = div().id(id).absolute().left(x).top(y).w(0).h(0)
         .child(div().absolute().left(-11).top(-4).w(22).h(7).rounded_full().bg("#00000033"))
+        .when(chosen === pr.key, (e) => e.child(image(`${MONDE}/ring-selected.png`).absolute().left(-24).top(-13).w(48).h(26)))
         .child(div().absolute().left(0).top(0).w(0).h(0)
           .when(bob && live, (e) => e.loop("top", { from: 0, to: -2, period: 700 }))
           .child(sprite(kind, face)));
@@ -62,9 +68,9 @@ export class Cour {
           .when(live, (e) => e.loop("top", { from: head - 27, to: head - 32, period: 900 })));
       }
       el = el.child(div().id(`${id}-clic`).absolute().left(-p.ax).top(-p.ay).w(p.w).h(p.h).cursor_pointer()
-        .tooltip(`${pr.repo}#${pr.number} ${pr.title}\n${tr("prState")[pr.state] ?? ""}${"ci" in pr ? "" : ` · @${pr.author}`}\n${tr("prOpenTip")}`)
+        .tooltip(`${pr.repo}#${pr.number} ${pr.title}\n${tr("prState")[pr.state] ?? ""}${"ci" in pr ? "" : ` · @${pr.author}`}\n${tr("courSelectTip")}`)
         .on_mouse_down("left", stop)
-        .on_click(() => exec("open", [pr.url])));
+        .on_click(() => setShared(PRSEL, chosen === pr.key ? null : { key: pr.key })));
       return { z: y + 3, el, box: { x: x - p.ax, y: y - p.ay, w: p.w, h: p.h, fy: y } };
     };
 
@@ -82,7 +88,7 @@ export class Cour {
     const pets = d.petitioners.filter((p) => p.ready).sort((a, b) => (a.state === "returns" ? 0 : 1) - (b.state === "returns" ? 0 : 1) || a.updatedAt - b.updatedAt);
     pets.slice(0, QUEUE.length).forEach((p, i) => {
       const waited = Date.now() - p.updatedAt > 3 * 86_400_000; // three days: impatient
-      out.push(villager(`petition-${p.key}`, i % 2 ? "fermier" : "paysanne", QUEUE[i], "-g", p,
+      out.push(villager(`petition-${p.key}`, villagerKind(p, "petitioners"), QUEUE[i], "-g", p,
         { mark: p.state === "returns" ? "done" : null, bob: waited }));
     });
     if (pets.length > QUEUE.length) out.push(more("petition-plus", QUEUE[QUEUE.length - 1], pets.length - QUEUE.length, "petitioners"));

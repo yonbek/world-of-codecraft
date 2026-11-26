@@ -14,6 +14,7 @@ import { t } from "./i18n.js";
 
 export const KEY = "wocc.prs";
 export const SEEN = "wocc.prs.seen";
+export const PRSEL = "wocc.prs.sel"; // the PR selected in the village: { key }, shown in the command panel
 export const PANEL = "wocc.prs.panel"; // the register: { list, overlay } while open, { list, closedAt } after
 export const POLL_MS = 120_000;
 const RECENT_DAYS = 30;
@@ -180,6 +181,23 @@ export async function refresh() {
   } finally {
     running = false;
   }
+}
+
+/** "5 min ago", "3h ago", "2d ago". */
+export function ago(ms) {
+  const m = Math.max(0, Math.round((Date.now() - ms) / 60_000));
+  if (m < 60) return t("prMin", m);
+  const h = Math.round(m / 60);
+  return h < 48 ? t("prHours", h) : t("prDays", Math.round(h / 24));
+}
+
+/** A PR by key, with its list ("envoys" | "petitioners"), or null. */
+export function findPr(d, key) {
+  for (const list of ["envoys", "petitioners"]) {
+    const p = d?.[list]?.find((x) => x.key === key);
+    if (p) return { p, list };
+  }
+  return null;
 }
 
 /** "#1183" → the repo and number shown on a line. */

@@ -22,6 +22,7 @@ import { t as tr, detectLang } from "./i18n.js";
 import { Activites } from "./activite.js";
 import { Ambiance, behind } from "./ambiance.js";
 import { Cour } from "./cour.js";
+import { PRSEL } from "./prs.js";
 import { DEMO_LOG } from "./demo.js";
 import { commandPanel, MINI_INSET } from "./commande.js";
 import { EXT } from "./terre-data.js";
@@ -249,7 +250,7 @@ export default class Place {
     el = el.child(div().id(`clic-${a.address}`).absolute().left(-ax).top(-ay).w(w).h(hh).cursor_pointer()
       .tooltip(tr("unitTip", heroTitle(h), h.prog, `${a.space_name ?? ""} › ${a.tab_name ?? ""}`, QUEST[st]?.mot ?? tr("onGuardTerm")))
       .on_mouse_down("left", stop)
-      .on_click(() => (a.guard ? run("pane.focus", { pane: a.pane }) : run("agent.focus", { terminal: a.address }))));
+      .on_click(() => { setShared(PRSEL, null); a.guard ? run("pane.focus", { pane: a.pane }) : run("agent.focus", { terminal: a.address }); }));
 
     const head = -ay;
     if (st === "blocked" && !u.leg) {
@@ -474,6 +475,7 @@ export default class Place {
     const vw = Math.max(200, this.w - (imm ? 0 : PANEL));
     if (imm) this.bridge(units, vw);
     if (sel && sel.a.address !== this.lastFocus) {
+      if (this.lastFocus !== undefined && shared(PRSEL)) setShared(PRSEL, null); // another hero: the panel follows it
       this.lastFocus = sel.a.address;
       this.manual = false; // a new selection takes the camera back
       this.camX = sel.x - vw / 2; // glide to the selected unit
