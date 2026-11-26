@@ -11,6 +11,7 @@ import { t } from "./i18n.js";
 
 export const KEY = "wocc.prs";
 export const SEEN = "wocc.prs.seen";
+export const PANEL = "wocc.prs.panel"; // the register: { list, overlay } while open, { list, closedAt } after
 export const POLL_MS = 120_000;
 const RECENT_DAYS = 30;
 const BATCH = 20; // PRs per details query: bigger ones time out on GitHub's side (HTTP 502)

@@ -5,8 +5,8 @@
 
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { exec, shared, props, closeOverlay } from "herdr";
-import { KEY, NEEDS_YOU, unseen, markSeen, refresh, label } from "./prs.js";
+import { exec, shared, setShared, props, closeOverlay } from "herdr";
+import { KEY, PANEL, NEEDS_YOU, unseen, markSeen, refresh, label } from "./prs.js";
 import { t } from "./i18n.js";
 import { P, txt, title, well } from "./ui.js";
 
@@ -26,6 +26,11 @@ export default class Registre {
     this.fresh = unseen(shared(KEY), this.list); // what to mark as new while this stays open
     this.showOld = false;
     markSeen(this.list);
+    setShared(PANEL, { list: this.list, overlay: props()?.overlay });
+  }
+
+  async close() {
+    setShared(PANEL, { list: this.list, closedAt: Date.now() });
   }
 
   open(url) {

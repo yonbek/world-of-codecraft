@@ -34,6 +34,10 @@ export default class Valbrume extends View {
     if (!this.role) this.all = Object.values(ROLES).map((K) => { const r = new K(); r.init?.(pr, cx); return r; });
   }
 
+  async close(cx) {
+    await this.role?.close?.(cx);
+  }
+
   render(cx) {
     if (!this.role) return div().flex().flex_col().size_full().children(this.all.map((r) => div().h(240).child(r.render(cx))));
     return this.role.render(cx);

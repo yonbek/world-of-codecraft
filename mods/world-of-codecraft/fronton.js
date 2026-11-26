@@ -9,11 +9,11 @@
 
 import { div, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { spaces, agents, run, props, layout, nextCommand, shared, setShared, openOverlay, window as appWindow } from "herdr";
+import { spaces, agents, run, props, layout, nextCommand, shared, setShared, openOverlay, closeOverlay, window as appWindow } from "herdr";
 import { VILLAGE, district, clip, heroOf, heroTitle, hourName, hhmm, isNight, readQuotas, left } from "./kit.js";
 import { P, DECO, TEXTE, bar, pic, txt, button, mark, banner } from "./ui.js";
 import { DEMO_SPACES } from "./demo.js";
-import { KEY as PRS, SEEN, POLL_MS, NEEDS_YOU, refresh, unseen } from "./prs.js";
+import { KEY as PRS, SEEN, PANEL, POLL_MS, NEEDS_YOU, refresh, unseen } from "./prs.js";
 import { W as REG_W, H as REG_H } from "./registre.js";
 import { t, detectLang } from "./i18n.js";
 
@@ -49,8 +49,13 @@ function toggleVillage() {
 const PW = 136; // plaque width
 const SEEN_STORE = "wocc.prs.seen"; // localStorage: what the person saw, across restarts
 
-/** The register of one list ("envoys" | "petitioners"), as a popup at `at` (window px), else centered. */
-function openRegistre(list, at) {
+/** Opens the register of one list ("envoys" | "petitioners") as a popup at `at` (window px), else
+ *  centered; closes it instead when it is open. A press beside a popup closes it before the click
+ *  lands, so a register of this list closed a moment ago counts as open: the click toggles it shut. */
+function toggleRegistre(list, at) {
+  const st = shared(PANEL);
+  if (st?.list === list && st.overlay) { closeOverlay(st.overlay); return; }
+  if (st?.list === list && Date.now() - (st.closedAt ?? 0) < 500) return;
   openOverlay({ mod: "world-of-codecraft", props: { role: "registre", list }, kind: "popup", width: REG_W, height: REG_H, ...(at ? { at } : {}) });
 }
 
@@ -78,7 +83,7 @@ export default class Fronton {
         const c = await nextCommand();
         if (c === "mode") { setShared("wocc.fold", false); setMode(!immersive()); }
         else if (c === "village") toggleVillage();
-        else if (c === "envoys" || c === "petitioners") openRegistre(c, this.under(c));
+        else if (c === "envoys" || c === "petitioners") toggleRegistre(c, this.under(c));
         else continue;
         cx.notify();
       }
@@ -114,7 +119,7 @@ export default class Fronton {
   courrier(list, icon, main, sub, tip, warn, fresh) {
     return this.plaque(`res-${list}`, icon, main, sub, tip, warn).cursor_pointer()
       .on_mouse_down("left", (e) => { if (e.bounds) this.anchor[list] = e.bounds; })
-      .on_click(() => openRegistre(list, this.under(list)))
+      .on_click(() => toggleRegistre(list, this.under(list)))
       .when(fresh > 0, (el) => el.child(div().absolute().right(6).top(5).w(8).h(8).rounded(4).bg(P.gold)
         .loop("opacity", { from: 0.45, to: 1, period: 1400 })));
   }
