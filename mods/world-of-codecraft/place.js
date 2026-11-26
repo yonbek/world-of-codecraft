@@ -21,6 +21,7 @@ import { SPOTS, FIRE, REST, ROAD, BUILDINGS, market, SMOKE, GLOWS, LISIERE } fro
 import { t as tr, detectLang } from "./i18n.js";
 import { Activites } from "./activite.js";
 import { Ambiance, behind } from "./ambiance.js";
+import { Cour } from "./cour.js";
 import { DEMO_LOG } from "./demo.js";
 import { commandPanel, MINI_INSET } from "./commande.js";
 import { EXT } from "./terre-data.js";
@@ -94,6 +95,7 @@ export default class Place {
     this.sig = "";
     this.act = new Activites(); // what each hero does while working (Claude Code hook)
     this.amb = new Ambiance(); // village life: walkers, animals, treasury, fair (only when animated)
+    this.cour = new Cour(); // the town hall's court: your PRs and reviews as villagers (always drawn)
     this.live = true; // the « Animations » toggle (shared wocc.anim): off = still images, no walk, no scenes
     try { this.log = JSON.parse(localStorage.getItem(LOG_KEY) ?? "[]"); } catch { this.log = []; }
     cx.timer.every(60_000, (cx) => { this.now = new Date(); cx.notify(); });
@@ -497,7 +499,7 @@ export default class Place {
     for (const u of units) { const c = this.act.creature(u, nightHeroes); if (c) things.push(c); }
     const working = list.filter((a) => a.status === "working").length;
     this.amb.watch(cx, this.live && !hidden, { phase: sk.phase });
-    const life = this.live ? this.amb.things(nightHeroes, sk.phase, working) : [];
+    const life = [...(this.live ? this.amb.things(nightHeroes, sk.phase, working) : []), ...this.cour.things(nightHeroes, this.live)];
     things.push(...life);
     for (const fr of FRONTS) {
       const over = units.some((u) => {

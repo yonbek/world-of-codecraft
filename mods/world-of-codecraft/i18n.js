@@ -104,6 +104,8 @@ const S = {
     prToastAsked: (who) => `Review requested by @${who}`,
     prToastReturns: (who) => `New commits on @${who}'s PR since your review`,
     prToastMany: (n) => `${n} PR updates`,
+    courMore: (n) => `${n} more (click: the list)`,
+    courRaven: (e, p) => `News from the town hall: ${[e && `${e} of your PRs`, p && `${p} reviews`].filter(Boolean).join(", ")} changed since you last looked (click: the list)`,
     immersion: "Immersion", workshop: "Workshop",
     immersionTip: "Immersive mode: the village fills the window, the terminal goes below (ctrl-shift-i)",
     workshopTip: "Back to the workshop: the terminal fills the window, the village goes below (ctrl-shift-i)",
