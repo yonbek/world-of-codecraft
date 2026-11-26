@@ -56,7 +56,7 @@ function toggleRegistre(list, at) {
   const st = shared(PANEL);
   if (st?.list === list && st.overlay) { closeOverlay(st.overlay); return; }
   if (st?.list === list && Date.now() - (st.closedAt ?? 0) < 500) return;
-  openOverlay({ mod: "world-of-codecraft", props: { role: "registre", list }, kind: "popup", width: REG_W, height: REG_H, ...(at ? { at } : {}) });
+  openOverlay({ mod: "world-of-codecraft", props: { role: "registre", list }, kind: "popup", frame: "none", width: REG_W, height: REG_H, ...(at ? { at } : {}) });
 }
 
 export default class Fronton {
