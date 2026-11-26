@@ -1,11 +1,16 @@
 // The command panel (left part of the bottom strip), drawn for place.js: a carved oak frame,
 // "Map of Valbrume" (the minimap from place.js, in a small iron frame), the « Animations »
 // toggle, and "Selected unit": the focused hero full-length in a gold portrait frame, name, class,
-// state gem, quest, and the Go / Next buttons. The isometric world itself stays in place.js.
+// state gem, quest, and the Go / Next buttons; or, while a villager is selected (shared
+// "wocc.prs.sel"), its pull request. The isometric world itself stays in place.js.
 
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { run } from "herdr";
+import { run, exec } from "herdr";
+import { KEY as PRS, PRSEL, findPr, ago } from "./prs.js";
+import { villagerKind } from "./cour.js";
+import { GEM, TONE as PR_TONE, shown } from "./registre.js";
+import { CREATURES } from "./creatures-data.js";
 import { CLASSES, RACE_FR, QUEST, heroDesc } from "./kit.js";
 import { gradient } from "./kit.js";
 import { t } from "./i18n.js";
@@ -19,7 +24,35 @@ function heading(text) {
     .child(div().absolute().left(24).right(24).top(0).bottom(0).flex().items_center().child(title(text, 16, P.goldHi)));
 }
 
+/** A selected villager's pull request: who stands for it, its state, the facts, Open / Let go. */
+function prCard({ p, list }) {
+  const kind = villagerKind(p, list);
+  const c = CREATURES[kind].debout;
+  const st = shown(p);
+  const word = st === "notready" ? `${t("prState").notready}: ${t("prNotReady")[p.notReady]}` : t("prState")[st];
+  const facts = list === "envoys"
+    ? [t("prFactCi", p.ci), p.open ? t("prOpen", p.open) : null]
+    : [`@${p.author}`, p.mine ? t("prFactMine", p.mine) : null];
+  facts.push(`+${p.adds} −${p.dels} · ${ago(p.updatedAt)}`);
+  return h_flex().flex_1().min_h(0).gap(8).px(2).pt(8).items_start()
+    .child(well(div().relative().flex_none().w(66).h(96).overflow_hidden(), { bg: P.night })
+      .child(image(`mods/world-of-codecraft/art/creatures/${kind}/debout.png`).absolute()
+        .left(Math.round((66 - c.w) / 2)).top(Math.round((96 - c.h) / 2)).w(c.w).h(c.h)))
+    .child(v_flex().flex_1().min_w(0).gap(2)
+      .child(title(`${p.short}#${p.number}`, 17, P.goldHi).truncate())
+      .child(txt(p.title, 14, P.cream, 700).truncate())
+      .child(h_flex().gap(4).items_center()
+        .child(GEM[st] ? gem(GEM[st], true) : div().w(15))
+        .child(txt(word, 14, PR_TONE[st] ?? P.idle, 800).truncate()))
+      .children(facts.filter(Boolean).map((f) => txt(f, 13, P.muted, 700).truncate()))
+      .child(h_flex().gap(6).pt(4)
+        .child(button("pr-ouvrir", txt(t("prOpenBtn"), 15, P.cream, 800), () => exec("open", [p.url]), { tip: p.url }))
+        .child(button("pr-lacher", txt(t("prLetGo"), 15, P.cream, 800), () => setShared(PRSEL, null), { tip: t("prLetGoTip") }))));
+}
+
 function card(sel) {
+  const pr = findPr(shared(PRS), shared(PRSEL)?.key);
+  if (pr) return prCard(pr);
   if (!sel) {
     return v_flex().flex_1().items_center().justify_center().gap(4)
       .child(txt(t("noUnit"), 16, P.muted, 700))

@@ -7,12 +7,14 @@
 // the district's banner and a parchment scroll with the district and quest. On the right,
 // the waiting-heroes button (click: go to the next one), then the hour plaque.
 
-import { div } from "gpui-kit";
+import { div, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { spaces, agents, run, props, layout, nextCommand, window as appWindow } from "herdr";
+import { spaces, agents, run, props, layout, nextCommand, shared, setShared, openOverlay, closeOverlay, window as appWindow } from "herdr";
 import { VILLAGE, district, clip, heroOf, heroTitle, hourName, hhmm, isNight, readQuotas, left } from "./kit.js";
 import { P, DECO, TEXTE, bar, pic, txt, button, mark, banner } from "./ui.js";
 import { DEMO_SPACES } from "./demo.js";
+import { KEY as PRS, SEEN, PANEL, POLL_MS, NEEDS_YOU, refresh, unseen } from "./prs.js";
+import { W as REG_W, H as REG_H } from "./registre.js";
 import { t, detectLang } from "./i18n.js";
 
 // Immersive mode lives in the one layout: the big village (place-immersion) and the command panel
@@ -28,8 +30,34 @@ function setMode(on) {
   run(on ? "layout.hide" : "layout.show", { id: "place" });
   run("layout.resize", on ? { id: "arene", px: 400 } : { id: "arene", weight: 1 });
 }
+// Within immersive mode, fold the big village and the command panel away and let the terminal fill
+// their place. "wocc.fold" remembers it, since a folded window looks like workshop mode with its strip hidden.
+function toggleVillage() {
+  let l; try { l = layout(); } catch { return; }
+  const shown = (id) => { const n = node(l, id); return Boolean(n && !n.hidden); };
+  if (shown("place-immersion")) {
+    run("layout.hide", { id: "place-immersion" });
+    run("layout.hide", { id: "commande" });
+    run("layout.resize", { id: "arene", weight: 1 });
+    setShared("wocc.fold", true);
+  } else if (shared("wocc.fold")) {
+    setShared("wocc.fold", false);
+    if (!shown("place")) setMode(true);
+  }
+}
 
 const PW = 136; // plaque width
+const SEEN_STORE = "wocc.prs.seen"; // localStorage: what the person saw, across restarts
+
+/** Opens the register of one list ("envoys" | "petitioners") as a popup at `at` (window px), else
+ *  centered; closes it instead when it is open. A press beside a popup closes it before the click
+ *  lands, so a register of this list closed a moment ago counts as open: the click toggles it shut. */
+function toggleRegistre(list, at) {
+  const st = shared(PANEL);
+  if (st?.list === list && st.overlay) { closeOverlay(st.overlay); return; }
+  if (st?.list === list && Date.now() - (st.closedAt ?? 0) < 500) return;
+  openOverlay({ mod: "world-of-codecraft", props: { role: "registre", list }, kind: "popup", frame: "none", width: REG_W, height: REG_H, ...(at ? { at } : {}) });
+}
 
 export default class Fronton {
   init(_p, cx) {
@@ -42,8 +70,24 @@ export default class Fronton {
     };
     tick(cx);
     cx.timer.every(60_000, tick);
+    // envoys and petitioners: this copy polls GitHub for every copy (paused while the window is hidden)
+    if (!shared(SEEN)) { try { const s = JSON.parse(localStorage.getItem(SEEN_STORE) ?? "null"); if (s) setShared(SEEN, s); } catch {} }
+    this.savedSeen = shared(SEEN);
+    this.anchor = {}; // list → its plaque's bounds, from the last press on it
+    cx.spawn(async () => { await refresh(); });
+    cx.timer.every(POLL_MS, (cx) => { if (appWindow()?.visible !== false) cx.spawn(async () => { await refresh(); }); });
     // ctrl-shift-i (KEYS.json): "world-of-codecraft.mode"
-    cx.spawn(async (cx) => { for (;;) { if ((await nextCommand()) === "mode") { setMode(!immersive()); cx.notify(); } } });
+    // ctrl-shift-k (keys.json): "world-of-codecraft.village"
+    cx.spawn(async (cx) => {
+      for (;;) {
+        const c = await nextCommand();
+        if (c === "mode") { setShared("wocc.fold", false); setMode(!immersive()); }
+        else if (c === "village") toggleVillage();
+        else if (c === "envoys" || c === "petitioners") toggleRegistre(c, this.under(c));
+        else continue;
+        cx.notify();
+      }
+    });
   }
 
   /** An ornate plaque: icon in its gold socket, the value, a caption. */
@@ -63,6 +107,42 @@ export default class Fronton {
     const five = q.five ? t("five", 100 - q.five.used) : t("account", acc);
     const tip = t("quotaTip", label, acc, rem, left(q.week.resets) || "?", q.five ? 100 - q.five.used : null, q.five?.resets ? left(q.five.resets) : "", q.stale);
     return this.plaque(`res-${acc}`, icon, `${t("pct", rem)}${q.stale ? " ?" : ""}`, five, tip, rem <= 20);
+  }
+
+  /** Where a list's register opens: its left edge under its plaque (null before the plaque was pressed). */
+  under(list) {
+    const b = this.anchor[list];
+    return b ? { x: Math.round(b.x), y: Math.round(b.y + b.height + 4) } : null;
+  }
+
+  /** A plaque that opens the register, with a gold dot while something in it is new. */
+  courrier(list, icon, main, sub, tip, warn, fresh) {
+    return this.plaque(`res-${list}`, icon, main, sub, tip, warn).cursor_pointer()
+      .on_mouse_down("left", (e) => { if (e.bounds) this.anchor[list] = e.bounds; })
+      .on_click(() => toggleRegistre(list, this.under(list)))
+      .when(fresh > 0, (el) => el.child(div().absolute().right(6).top(5).w(8).h(8).rounded(4).bg(P.gold)
+        .loop("opacity", { from: 0.45, to: 1, period: 1400 })));
+  }
+
+  envoys(d, fresh) {
+    const e = d.envoys;
+    const n = (st) => e.filter((p) => p.state === st).length;
+    const icon = image("mods/world-of-codecraft/art/creatures/emissaire/debout.png").w(19).h(32);
+    const main = d.error && !d.at ? "?" : String(e.length);
+    return this.courrier("envoys", icon, main, t("envoysSub", n("fail"), n("changes"), n("comments"), n("ready")),
+      `${t("envoysTip", e.length, n("fail"), n("changes"), n("comments"), n("waiting"), n("draft"), n("ready"))}${d.error ? `\n${t("prError", d.error)}` : ""}`,
+      e.some((p) => NEEDS_YOU.has(p.state)), fresh);
+  }
+
+  petitioners(d, fresh) {
+    const ps = d.petitioners.filter((p) => p.ready); // the ones waiting on the person
+    const back = ps.filter((p) => p.state === "returns").length;
+    const waiting = d.petitioners.length - ps.length;
+    const icon = image("mods/world-of-codecraft/art/creatures/suppliante/debout.png").w(14).h(31);
+    const main = d.error && !d.at ? "?" : String(ps.length);
+    return this.courrier("petitioners", icon, main, t("petitionersSub", back, waiting),
+      `${t("petitionersTip", ps.length, back, waiting, d.old.length)}${d.error ? `\n${t("prError", d.error)}` : ""}`,
+      false, fresh);
   }
 
   /** The immersive-mode switch: swaps the village (big) and the terminal (below), in the same layout. */
@@ -88,6 +168,10 @@ export default class Fronton {
     const fair = resets.length ? left(Math.min(...resets)) : "";
     const gold = this.quota("A", t("gold"), pic("ic-or", 32, 24));
     const wood = this.quota("B", t("wood"), pic("ic-bois", 36, 28));
+    const prs = shared(PRS);
+    const seen = shared(SEEN);
+    if (seen && seen !== this.savedSeen) { this.savedSeen = seen; try { localStorage.setItem(SEEN_STORE, JSON.stringify(seen)); } catch {} }
+
 
     const waiting = blocked.length ? blocked : done;
     let alert = null;
@@ -135,6 +219,7 @@ export default class Fronton {
         .when(Boolean(gold), (el) => el.child(gold))
         .when(Boolean(wood), (el) => el.child(wood))
         .child(this.plaque("res-heros", pic("ic-heros", 26, 22), `${busy} / ${all.length}`, t("heroesAtWork"), t("heroesTip", busy, all.length)))
+        .when(Boolean(prs?.envoys), (el) => el.child(this.envoys(prs, unseen(prs, "envoys").size)).child(this.petitioners(prs, unseen(prs, "petitioners").size)))
         .when(resets.length > 0, (el) => el.child(this.plaque("res-foire", pic("ic-sablier", 22, 28), fair || "—", t("untilFair"), t("fairTip"))))
         .child(div().flex_1().min_w(0).flex().justify_center().when(Boolean(scroll), (el) => el.child(scroll)))
         .when(Boolean(alert), (el) => el.child(alert))

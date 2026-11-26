@@ -2,7 +2,7 @@
 
   uvx --with pillow --with numpy python tools/sync_creatures.py
 
-Sources (GPT Image 2.6, 08/11/2026, style ref = tools/sources/ref-style.png):
+Sources (GPT Image 2.6, 08/11/2026, style ref = tools/sources/ref-style.png; court-1.png: 26/11/2026, prompt in court-1.prompt.md):
   creatures-planche-1.png   3 rows (imp, wolf, goblin) x 3 poses (ready, attack, hit) on flat green
   corbeau.png               row 1: 4 flight frames, row 2: perched, cawing (optional)
 Writes art/creatures/<name>/<pose>{,-g}{,-n}.png at 2x (1 art px = 1 logical px; -g = mirrored to face
@@ -38,6 +38,10 @@ CREATURES = {
     "cerf": ("ambiance-2.png", 4, 2, 2, 38, ["broute", "alerte"]),
     "moineau": ("ambiance-2.png", 4, 3, 3, 11, ["vol0", "vol1", None]),
     "poisson": ("ambiance-2.png", 4, 3, 3, 22, [None, None, "saut"]),
+    # The town hall's court (26/11/2026, GPT image, prompt in sources/court-1.prompt.md): envoys and petitioners
+    "emissaire": ("court-1.png", 3, 3, 0, 62, ["debout", "pas", "abattu"]),
+    "suppliante": ("court-1.png", 3, 3, 1, 58, ["debout", "pas", "impatiente"]),
+    "suppliant": ("court-1.png", 3, 3, 2, 58, ["debout", "pas", "impatient"]),
 }
 RAVEN = ("corbeau.png", 24)  # logical height of a flying frame
 

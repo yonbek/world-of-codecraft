@@ -40,7 +40,7 @@ cmd = re.sub(r"<<-?\s*['\"]?(\w+)['\"]?[^\n]*\n.*?\n\s*\1\b", " ", cmd, flags=re
 cmd = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", cmd)
 # only real commands: at the start of the command line or after ; & | ( (not inside quoted text or heredocs)
 AT = r"(?:^|[;&|(]\s*)(?:\w+=\S+\s+)*"
-TEST = re.compile(AT + r"((bun|npm|pnpm|yarn|npx|bunx)\s+(run\s+)?test|vitest|jest|pytest|playwright\s+test|cargo\s+test|go\s+test|rspec|phpunit|mix\s+test|deno\s+test)\b", re.M)
+TEST = re.compile(AT + r"((bun|npm|pnpm|yarn|npx|bunx)\s+(run\s+)?test|vitest|jest|pytest|playwright\s+test|cargo\s+test|go\s+test|rspec|phpunit|mix\s+test|deno\s+test|just\s+test|code-checks)\b", re.M)
 COMMIT = re.compile(AT + r"git\s+(-C\s+\S+\s+)?commit\b", re.M)
 PUSH = re.compile(AT + r"git\s+(-C\s+\S+\s+)?push\b", re.M)
 

@@ -21,6 +21,8 @@ import { SPOTS, FIRE, REST, ROAD, BUILDINGS, market, SMOKE, GLOWS, LISIERE } fro
 import { t as tr, detectLang } from "./i18n.js";
 import { Activites } from "./activite.js";
 import { Ambiance, behind } from "./ambiance.js";
+import { Cour } from "./cour.js";
+import { PRSEL } from "./prs.js";
 import { DEMO_LOG } from "./demo.js";
 import { commandPanel, MINI_INSET } from "./commande.js";
 import { EXT } from "./terre-data.js";
@@ -94,6 +96,7 @@ export default class Place {
     this.sig = "";
     this.act = new Activites(); // what each hero does while working (Claude Code hook)
     this.amb = new Ambiance(); // village life: walkers, animals, treasury, fair (only when animated)
+    this.cour = new Cour(); // the town hall's court: your PRs and reviews as villagers (always drawn)
     this.live = true; // the « Animations » toggle (shared wocc.anim): off = still images, no walk, no scenes
     try { this.log = JSON.parse(localStorage.getItem(LOG_KEY) ?? "[]"); } catch { this.log = []; }
     cx.timer.every(60_000, (cx) => { this.now = new Date(); cx.notify(); });
@@ -247,7 +250,7 @@ export default class Place {
     el = el.child(div().id(`clic-${a.address}`).absolute().left(-ax).top(-ay).w(w).h(hh).cursor_pointer()
       .tooltip(tr("unitTip", heroTitle(h), h.prog, `${a.space_name ?? ""} › ${a.tab_name ?? ""}`, QUEST[st]?.mot ?? tr("onGuardTerm")))
       .on_mouse_down("left", stop)
-      .on_click(() => (a.guard ? run("pane.focus", { pane: a.pane }) : run("agent.focus", { terminal: a.address }))));
+      .on_click(() => { setShared(PRSEL, null); a.guard ? run("pane.focus", { pane: a.pane }) : run("agent.focus", { terminal: a.address }); }));
 
     const head = -ay;
     if (st === "blocked" && !u.leg) {
@@ -472,11 +475,19 @@ export default class Place {
     const vw = Math.max(200, this.w - (imm ? 0 : PANEL));
     if (imm) this.bridge(units, vw);
     if (sel && sel.a.address !== this.lastFocus) {
+      if (this.lastFocus !== undefined && shared(PRSEL)) setShared(PRSEL, null); // another hero: the panel follows it
       this.lastFocus = sel.a.address;
       this.manual = false; // a new selection takes the camera back
       this.camX = sel.x - vw / 2; // glide to the selected unit
       if (imm) this.camY = sel.y - 60 - (this.h ?? WORLD.h) / 2; // and bring the village back into view
     } else if (sel?.leg && !this.manual) this.camX = sel.x - vw / 2; // and follow it while it walks
+    // a villager of the court selected (cour.js): the camera goes to it, as for a hero
+    const pick = shared(PRSEL)?.key ?? null;
+    const spot = pick && this.cour.where?.[pick];
+    if (pick !== this.lastPick && (!pick || spot)) { // wait for the court's first draw to know where it stands
+      this.lastPick = pick;
+      if (spot) { this.camX = spot[0] - vw / 2; this.manual = true; }
+    }
     const camX = this.cam(vw);
 
     // frame animation: visible units with frames, or any walking unit
@@ -497,7 +508,7 @@ export default class Place {
     for (const u of units) { const c = this.act.creature(u, nightHeroes); if (c) things.push(c); }
     const working = list.filter((a) => a.status === "working").length;
     this.amb.watch(cx, this.live && !hidden, { phase: sk.phase });
-    const life = this.live ? this.amb.things(nightHeroes, sk.phase, working) : [];
+    const life = [...(this.live ? this.amb.things(nightHeroes, sk.phase, working) : []), ...this.cour.things(nightHeroes, this.live)];
     things.push(...life);
     for (const fr of FRONTS) {
       const over = units.some((u) => {

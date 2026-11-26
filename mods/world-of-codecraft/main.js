@@ -4,6 +4,7 @@
 //   place    the bottom strip: the village square, heroes, fountains, chronicle
 //   pane     a pane's header: a stitched leather band with the hero working in it
 //   commande the command panel as its own block (immersive layout: under the board, beside the terminal)
+//   registre the envoys (your PRs) and petitioners (PRs for your review), a popup from the header
 //   rail     one side of the carved frame around the terminals (props.side: top, bottom, left, right)
 
 import { View, div } from "gpui-kit";
@@ -13,6 +14,7 @@ import Tableau from "./tableau.js";
 import Place from "./place.js";
 import PaneHead from "./pane.js";
 import { Commande } from "./commande.js";
+import Registre from "./registre.js";
 import { rail } from "./ui.js";
 
 class Rail {
@@ -20,7 +22,7 @@ class Rail {
   render() { return rail(this.side); }
 }
 
-const ROLES = { fronton: Fronton, tableau: Tableau, place: Place, pane: PaneHead, rail: Rail, commande: Commande };
+const ROLES = { fronton: Fronton, tableau: Tableau, place: Place, pane: PaneHead, rail: Rail, commande: Commande, registre: Registre };
 
 export default class Valbrume extends View {
   init(p, cx) {
@@ -30,6 +32,10 @@ export default class Valbrume extends View {
     this.role?.init?.(pr, cx);
     // No role (herdr-app check): every role at once, so the check covers them all.
     if (!this.role) this.all = Object.values(ROLES).map((K) => { const r = new K(); r.init?.(pr, cx); return r; });
+  }
+
+  async close(cx) {
+    await this.role?.close?.(cx);
   }
 
   render(cx) {
